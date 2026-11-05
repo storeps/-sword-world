@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Sword World — Prototype 0.1</title>
+<style>
+  *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111827;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;touch-action:none}
+  #game{position:fixed;inset:0} canvas{display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;color:#fff;text-shadow:0 2px 4px #172033}
+  .top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .panel{background:rgba(15,23,42,.78);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:9px 12px;backdrop-filter:blur(6px);box-shadow:0 5px 18px #0003}
+  .brand{font-weight:900;letter-spacing:.8px;font-size:14px}.small{font-size:11px;opacity:.85}
+  .stats{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.stat{font-weight:800;font-size:13px;white-space:nowrap}
+  .notice{position:absolute;top:88px;left:50%;transform:translateX(-50%);padding:7px 12px;border-radius:20px;background:#172554cc;font-size:12px;white-space:nowrap}
+  .bottom{position:absolute;left:12px;right:12px;bottom:14px;display:flex;justify-content:space-between;align-items:end}
+  #joystick{width:112px;height:112px;border-radius:50%;background:#0f172a88;border:2px solid #ffffff66;position:relative;pointer-events:auto;touch-action:none}
+  #stick{position:absolute;width:48px;height:48px;left:30px;top:30px;border-radius:50%;background:#dbeafecc;border:2px solid white;box-shadow:0 3px 10px #0006}
+  .actions{display:flex;align-items:end;gap:10px;pointer-events:auto}
+  button{border:0;color:white;font-weight:900;text-shadow:0 2px 3px #0005;box-shadow:0 5px 0 #0004,0 8px 18px #0004;touch-action:manipulation}
+  #attack{width:88px;height:88px;border-radius:50%;background:linear-gradient(145deg,#fb923c,#dc2626);border:3px solid #fed7aa;font-size:15px}
+  #jump{width:58px;height:58px;border-radius:50%;background:linear-gradient(145deg,#38bdf8,#2563eb);border:2px solid #bfdbfe;font-size:12px}
+  #attack:active,#jump:active{transform:translateY(3px);box-shadow:0 2px 0 #0004}
+  .hint{position:absolute;bottom:135px;left:50%;transform:translateX(-50%);font-size:11px;background:#0f172acc;padding:6px 10px;border-radius:10px;white-space:nowrap}
+  .barwrap{width:132px;height:8px;border-radius:8px;background:#334155;overflow:hidden;margin-top:5px}.bar{height:100%;width:100%;background:linear-gradient(90deg,#4ade80,#16a34a)}
+  .toast{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);font-weight:1000;font-size:25px;color:#fde68a;opacity:0;transition:opacity .15s;white-space:nowrap}
+  .toast.show{opacity:1}
+  .footer{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:9px;opacity:.65;white-space:nowrap}
+  @media(min-width:700px){#joystick{width:130px;height:130px}#stick{left:37px;top:37px}#attack{width:100px;height:100px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div class="hud">
+  <div class="top">
+    <div class="panel"><div class="brand">⚔ SWORD WORLD</div><div class="small">Prototype 0.1 • Starter Plaza</div></div>
+    <div class="stats">
+      <div class="panel"><div class="small">COINS</div><div class="stat">🪙 <span id="coins">0</span></div></div>
+      <div class="panel"><div class="small">DAMAGE</div><div class="stat">⚔ <span id="damage">10</span></div></div>
+      <div class="panel"><div class="small">LEVEL</div><div class="stat">⭐ <span id="level">1</span></div></div>
+    </div>
+  </div>
+  <div class="notice" id="targetLabel">Target latihan • Dummy</div>
+  <div class="toast" id="toast">+10 COINS!</div>
+  <div class="hint">Joystick untuk bergerak • tombol SERANG untuk menebas</div>
+  <div class="bottom">
+    <div id="joystick"><div id="stick"></div></div>
+    <div class="actions"><button id="jump">LOMPAT</button><button id="attack">⚔<br>SERANG</button></div>
+  </div>
+  <div class="footer">Prototype browser — belum merupakan pengalaman Roblox</div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const mount=document.getElementById('game');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8bd8ff);
+scene.fog=new THREE.Fog(0x8bd8ff,28,75);
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,120);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+mount.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x6680a0,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-8,16,10);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+
+const mat=(color,roughness=.8)=>new THREE.MeshStandardMaterial({color,roughness});
+const grass=mat(0x53bd72), path=mat(0xd7d9e2), blue=mat(0x4a91d9), red=mat(0xd94848), gold=mat(0xffc83d), white=mat(0xffffff), dark=mat(0x273449);
+function box(parent,x,y,z,w,h,d,material){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m}
+function cylinder(parent,x,y,z,r1,r2,h,material,segments=16){const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),material);m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m}
+
+// Plaza and paths
+box(scene,0,-.35,0,70,.6,70,grass);
+box(scene,0,-.02,0,12,.12,58,path);
+box(scene,0,.04,0,7,.08,58,red);
+box(scene,0,.02,0,38,.1,12,path);
+for(let i=-2;i<=2;i++) box(scene,i*2,.11,0,.08,.025,12,white);
+
+// Decorative plaza pads and shop buildings
+function shop(x,z,color,label){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ box(g,0,1.5,0,5,3,4,mat(color));box(g,0,3.25,0,5.6,.5,4.6,gold);
+ const roof=cylinder(g,0,4.1,0,0,2.6,1.4,mat(color),4);roof.rotation.y=Math.PI/4;
+ box(g,0,1.5,2.06,1.2,2.3,dark);
+ const sign=box(g,0,3.05,2.35,3.5,.65,.18,gold);
+}
+shop(-10,-7,0x3185d8,'SWORD SHOP');shop(10,-7,0x8b5bd6,'PET SHOP');shop(-10,8,0xd97736,'UPGRADE');shop(10,8,0x269c83,'EGG SHOP');
+
+// Portal arch
+const portalMat=new THREE.MeshStandardMaterial({color:0x8b5cf6,emissive:0x5422b5,emissiveIntensity:1.2});
+box(scene,0,2,-23,7,.6,1,portalMat);box(scene,-3.2,1,-23,.6,2.5,1,portalMat);box(scene,3.2,1,-23,.6,2.5,1,portalMat);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(2.3,.16,10,40),portalMat);ring.position.set(0,2,-23);scene.add(ring);
+
+// trees
+for(let i=0;i<24;i++){const a=i*Math.PI*2/24;const x=Math.cos(a)*27,z=Math.sin(a)*27;cylinder(scene,x,1,z,.25,.35,2,mat(0x805331));const crown=new THREE.Mesh(new THREE.SphereGeometry(1.25,10,8),mat(0x238b58));crown.position.set(x,2.5,z);crown.castShadow=true;scene.add(crown)}
+
+// Blocky player
+const player=new THREE.Group();scene.add(player);player.position.set(0,0,5);
+const skin=mat(0xffd3a4), shirt=mat(0x2563eb), pants=mat(0x26344f);
+const torso=box(player,0,1.35,0,.85,1,.45,shirt);
+const head=box(player,0,2.15,0,.62,.62,.62,skin);
+const legL=box(player,-.23,.48,0,.28,.75,.32,pants),legR=box(player,.23,.48,0,.28,.75,.32,pants);
+const armL=box(player,-.58,1.42,0,.25,.8,.28,skin),armR=box(player,.58,1.42,0,.25,.8,.28,skin);
+const sword=new THREE.Group();player.add(sword);sword.position.set(.78,1.35,-.08);
+box(sword,0,.48,0,.12,.95,.12,mat(0xcbd5e1));box(sword,0,-.04,0,.48,.12,.16,gold);box(sword,0,-.25,0,.16,.42,.18,mat(0x7c4a25));
+
+// Training dummy
+const dummy=new THREE.Group();scene.add(dummy);dummy.position.set(0,0,-5);
+cylinder(dummy,0,.3,0,.55,.65,.6,mat(0x8b5a35));
+box(dummy,0,1.15,0,.8,1.25,.55,mat(0xb87945));
+const dHead=new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),mat(0xf0c28a));dHead.position.y=2;dummy.add(dHead);
+box(dummy,-.62,1.25,0,.28,.85,.28,mat(0x8b5a35));box(dummy,.62,1.25,0,.28,.85,.28,mat(0x8b5a35));
+const hpBack=box(dummy,0,2.85,0,2,.13,.12,mat(0x334155));
+const hpFill=box(dummy,0,2.86,.07,1.96,.09,.05,mat(0x22c55e));
+let dummyHP=100,maxHP=100,coins=0,damage=10,level=1,attackReady=true,attackTime=0;
+function updateHud(){document.getElementById('coins').textContent=coins;document.getElementById('damage').textContent=damage;document.getElementById('level').textContent=level;document.getElementById('targetLabel').textContent=`Training Dummy • HP ${Math.max(0,dummyHP)}/${maxHP}`;hpFill.scale.x=Math.max(0,dummyHP/maxHP);hpFill.position.x=-.98*(1-dummyHP/maxHP)}
+updateHud();
+
+let moveX=0,moveY=0,jumping=false,vy=0;
+const joy=document.getElementById('joystick'),stick=document.getElementById('stick');
+let joyId=null;
+function joyMove(e){const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=38,len=Math.hypot(dx,dy)||1;if(len>max){dx=dx/len*max;dy=dy/len*max}moveX=dx/max;moveY=dy/max;stick.style.transform=`translate(${dx}px,${dy}px)`}
+joy.addEventListener('pointerdown',e=>{joyId=e.pointerId;joy.setPointerCapture(joyId);joyMove(e)});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===joyId)joyMove(e)});
+function joyEnd(){joyId=null;moveX=moveY=0;stick.style.transform='translate(0,0)'}
+joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
+document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();if(player.position.y<.03){vy=6.5;jumping=true}});
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),650)}
+function attack(){
+ if(!attackReady)return;attackReady=false;attackTime=.32;
+ const dist=player.position.distanceTo(dummy.position);
+ if(dist<5.7){
+   dummyHP=Math.max(0,dummyHP-damage);updateHud();
+   if(dummyHP<=0){coins+=25;level+=1;dummyHP=maxHP;toast('+25 COINS  •  LEVEL UP!');updateHud()}
+   else toast('-'+damage+' HP');
+ }else toast('DEKATI TARGET!');
+ setTimeout(()=>attackReady=true,450);
+}
+document.getElementById('attack').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
+addEventListener('keydown',e=>{if(e.code==='Space')attack();if(e.code==='ArrowUp'||e.code==='KeyW')moveY=-1;if(e.code==='ArrowDown'||e.code==='KeyS')moveY=1;if(e.code==='ArrowLeft'||e.code==='KeyA')moveX=-1;if(e.code==='ArrowRight'||e.code==='KeyD')moveX=1});
+addEventListener('keyup',e=>{if(['ArrowUp','ArrowDown','KeyW','KeyS'].includes(e.code))moveY=0;if(['ArrowLeft','ArrowRight','KeyA','KeyD'].includes(e.code))moveX=0});
+
+const clock=new THREE.Clock();
+function animate(){
+ requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
+ const forward=new THREE.Vector3(moveX,0,moveY);if(forward.length()>1)forward.normalize();
+ player.position.x+=forward.x*7*dt;player.position.z+=forward.z*7*dt;
+ player.position.x=THREE.MathUtils.clamp(player.position.x,-24,24);player.position.z=THREE.MathUtils.clamp(player.position.z,-26,25);
+ if(forward.length()>.05){player.rotation.y=Math.atan2(forward.x,forward.z);legL.rotation.x=Math.sin(performance.now()*.012)*.55;legR.rotation.x=-legL.rotation.x}else{legL.rotation.x=legR.rotation.x=0}
+ vy-=18*dt;player.position.y=Math.max(0,player.position.y+vy*dt);if(player.position.y===0)vy=0;
+ if(attackTime>0){attackTime-=dt;sword.rotation.x=-Math.sin((.32-attackTime)/.32*Math.PI)*1.8;armR.rotation.x=-.8}else{sword.rotation.x=0;armR.rotation.x=0}
+ camera.position.lerp(new THREE.Vector3(player.position.x,player.position.y+7,player.position.z+11),.09);camera.lookAt(player.position.x,player.position.y+1,player.position.z-2);
+ ring.rotation.z+=dt*.7;
+ renderer.render(scene,camera);
+}
+animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body>
+</html>
